@@ -1,7 +1,5 @@
 # MSSQL 2019 自動補齊預設值 & 不允許NULL 欄位
 
-
-
 ### 📄 說明 <a href="#shuo-ming" id="shuo-ming"></a>
 
 本文件記錄 MSSQL 2019 中，自動尋找資料庫所有未設定預設值的欄位，並依照型態給予預設值，同時將允許 NULL 的欄位改為「不允許 NULL」，並且記錄處理過程 Log 的完整腳本與流程說明。
@@ -42,8 +40,6 @@
 
 ### ⚙ 先建立SchemaChangeLog 資料表，紀錄LOG <a href="#xian-jian-li-schemachangelog-zi-liao-biao-ji-lu-log" id="xian-jian-li-schemachangelog-zi-liao-biao-ji-lu-log"></a>
 
-Copy
-
 ```
 IF OBJECT_ID('dbo.SchemaChangeLog', 'U') IS NULL
 BEGIN
@@ -65,8 +61,6 @@ END
 ```
 
 ### ⚙執行下列語法 <a href="#zhi-xing-xia-lie-yu-fa" id="zhi-xing-xia-lie-yu-fa"></a>
-
-Copy
 
 ```
 -- ==== 設定區 ====
