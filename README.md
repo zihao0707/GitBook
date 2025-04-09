@@ -48,7 +48,7 @@
 
 ### ⚙ 先建立SchemaChangeLog 資料表，紀錄LOG <a href="#xian-jian-li-schemachangelog-zi-liao-biao-ji-lu-log" id="xian-jian-li-schemachangelog-zi-liao-biao-ji-lu-log"></a>
 
-```
+```sql
 IF OBJECT_ID('dbo.SchemaChangeLog', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.SchemaChangeLog (
@@ -70,7 +70,7 @@ END
 
 ### ⚙執行下列語法 <a href="#zhi-xing-xia-lie-yu-fa" id="zhi-xing-xia-lie-yu-fa"></a>
 
-```
+```sql
 -- ==== 設定區 ====
 DECLARE @TargetTable NVARCHAR(128) = NULL; -- 指定資料表，例如 'MET03_0000'，NULL = 全部
 DECLARE @ExecuteCommands BIT = 0;           -- 1=立即執行, 0=只產生語法
