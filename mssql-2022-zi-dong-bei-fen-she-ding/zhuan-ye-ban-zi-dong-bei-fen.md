@@ -1,4 +1,4 @@
-# MSSQL 2022 專業版自動備份與清除教學【黑暗酷版】
+# 專業版自動備份
 
 > 適合有 SQL Server Agent 的 MSSQL Standard / Enterprise 使用者。\
 > 透過 SQL Agent Job 每天定時自動備份，並收縮交易記錄。

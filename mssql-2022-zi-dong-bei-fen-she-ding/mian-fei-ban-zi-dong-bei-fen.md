@@ -1,4 +1,4 @@
-# MSSQL 2022 免費版自動備份與清除教學【黑暗酷版】
+# 免費版自動備份
 
 > 本教學適合「無SQL Server Agent」的 MSSQL Express / 免費版使用者。\
 > 透過 Windows 排程器搭配 .bat + .sql 實現「每日自動備份 .bak 與 .trn」。\
