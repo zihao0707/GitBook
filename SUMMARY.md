@@ -9,4 +9,5 @@
 
 ***
 
-* [通用版UI操作自動備份](tong-yong-ban-ui-cao-zuo-zi-dong-bei-fen.md)
+* [免費版 UI 設定教學：自動備份與清除](mian-fei-ban-ui-she-ding-jiao-xue-zi-dong-bei-fen-yu-qing-chu.md)
+* [專業版 UI 設定教學：自動備份與清除](zhuan-ye-ban-ui-she-ding-jiao-xue-zi-dong-bei-fen-yu-qing-chu.md)
