@@ -11,3 +11,7 @@
 
 * [免費版 UI 設定教學：自動備份與清除](mian-fei-ban-ui-she-ding-jiao-xue-zi-dong-bei-fen-yu-qing-chu.md)
 * [專業版 UI 設定教學：自動備份與清除](zhuan-ye-ban-ui-she-ding-jiao-xue-zi-dong-bei-fen-yu-qing-chu.md)
+
+## 部分情境的語法說明
+
+* [使用 CROSS JOIN 擴展查詢結果](bu-fen-qing-jing-de-yu-fa-shuo-ming/shi-yong-cross-join-kuo-zhan-cha-xun-jie-guo.md)
