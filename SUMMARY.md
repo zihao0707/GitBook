@@ -15,3 +15,7 @@
 ## 部分情境的語法說明
 
 * [使用 CROSS JOIN 擴展查詢結果](bu-fen-qing-jing-de-yu-fa-shuo-ming/shi-yong-cross-join-kuo-zhan-cha-xun-jie-guo.md)
+
+***
+
+* [使用EXISTS查詢已匯入與未匯入的資料](shi-yong-exists-cha-xun-yi-hui-ru-yu-wei-hui-ru-de-zi-liao.md)
