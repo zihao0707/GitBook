@@ -19,3 +19,4 @@
 ***
 
 * [使用EXISTS查詢已匯入與未匯入的資料](shi-yong-exists-cha-xun-yi-hui-ru-yu-wei-hui-ru-de-zi-liao.md)
+* [拆解跨日資料 以遞迴方式為例](chai-jie-kua-ri-zi-liao-yi-di-hui-fang-shi-wei-li.md)
