@@ -53,20 +53,37 @@ WITH RecursiveSplit AS (
         station_code,
         mac_code,
         CAST(date_s AS DATE) AS work_date,
-        CAST(date_s AS DATETIME) + CAST(time_s AS DATETIME) AS start_time,
+        CAST(date_s + ' ' + time_s AS DATETIME) AS start_time,
+
+        -- 正確計算第一天的 end_time
         CASE 
-            WHEN DATEDIFF(DAY, date_s, ISNULL(date_e, GETDATE())) = 0 
-                THEN CAST(ISNULL(date_e, GETDATE()) AS DATETIME) + CAST(time_e AS DATETIME)
-            ELSE CAST(date_s AS DATETIME) + '23:59:59'
+            WHEN date_e = '' AND CAST(date_s AS DATE) = CAST(GETDATE() AS DATE)
+                THEN CAST(GETDATE() AS DATETIME)
+            WHEN date_e <> '' AND CAST(date_s AS DATE) = CAST(date_e AS DATE)
+                THEN CAST(date_e + ' ' + time_e AS DATETIME)
+            ELSE CAST(date_s + ' 23:59:59' AS DATETIME)
         END AS end_time,
-        CAST(date_s AS DATETIME) + CAST(time_s AS DATETIME) AS original_start_datetime,
-        CAST(ISNULL(date_e, GETDATE()) AS DATETIME) + CAST(time_e AS DATETIME) AS original_end_datetime
+
+        CAST(date_s + ' ' + time_s AS DATETIME) AS original_start_datetime,
+        -- 記錄原始結束時間（含當前時間）
+        CASE 
+            WHEN date_e = '' AND CAST(date_s AS DATE) = CAST(GETDATE() AS DATE)
+                THEN CAST(GETDATE() AS DATETIME)
+            ELSE CAST(date_e + ' ' + time_e AS DATETIME)
+        END AS original_end_datetime
     FROM MED08_0000
-    WHERE DATEDIFF(DAY, date_s, ISNULL(date_e, GETDATE())) <= 30
+   WHERE DATEDIFF(
+    DAY, 
+    date_s, 
+    CASE 
+        WHEN date_e = '' THEN CAST(GETDATE() AS DATE) 
+        ELSE CAST(date_e AS DATE) 
+    END
+) <= 10
 
     UNION ALL
 
-    -- 遞迴：每天往後加，直到結束日
+    -- 往後遞迴日期
     SELECT
         r.work_code,
         r.station_code,
@@ -76,7 +93,7 @@ WITH RecursiveSplit AS (
         CASE 
             WHEN DATEADD(DAY, 1, r.work_date) = CAST(r.original_end_datetime AS DATE)
                 THEN r.original_end_datetime
-            ELSE CAST(DATEADD(DAY, 1, r.work_date) AS DATETIME) + '23:59:59'
+            ELSE CAST(DATEADD(DAY, 1, r.work_date) AS DATETIME) + ' 23:59:59'
         END AS end_time,
         r.original_start_datetime,
         r.original_end_datetime
@@ -84,7 +101,7 @@ WITH RecursiveSplit AS (
     WHERE DATEADD(DAY, 1, r.work_date) <= CAST(r.original_end_datetime AS DATE)
 )
 
--- 最終輸出：包含每天工時
+-- 最終結果
 SELECT
     work_code,
     station_code,
@@ -94,6 +111,8 @@ SELECT
     CONVERT(VARCHAR(8), end_time, 108) AS time_e,
     DATEDIFF(MINUTE, start_time, end_time) AS work_time
 FROM RecursiveSplit
+WHERE DATEDIFF(MINUTE, start_time, end_time) > 0 
+
 ```
 
 ***
