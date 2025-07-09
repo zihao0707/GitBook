@@ -1,233 +1,221 @@
-# GitBook：Android 串接 C# API 教學（無 Entity Framework）
+# MSSQL 2019 自動補齊預設值 & 不允許NULL 欄位
 
-***
+### ⚠️執行結果預覽 <a href="#shuo-ming" id="shuo-ming"></a>
 
-## 1. ✅ 前置準備
+<figure><img src=".gitbook/assets/image.png" alt=""><figcaption><p>執行時的輸出輸出畫面</p></figcaption></figure>
 
-| 項目          | 工具                              |
-| ----------- | ------------------------------- |
-| C# API 建立工具 | Visual Studio 2022+ (.NET 6 以上) |
-| Android 工具  | Android Studio 4.0+             |
-| 測試設備        | Android 模擬器 或 實體裝置              |
-| 區網 IP       | 主機需有區網 IP，如 192.168.0.X         |
+<figure><img src=".gitbook/assets/image (1).png" alt=""><figcaption><p>Log記錄檔</p></figcaption></figure>
 
-***
+### 📄 說明 <a href="#shuo-ming" id="shuo-ming"></a>
 
-## 2. ✅ 建立 C# Web API（無 EF）
+本文件記錄 MSSQL 2019 中，自動尋找資料庫所有未設定預設值的欄位，並依照型態給予預設值，同時將允許 NULL 的欄位改為「不允許 NULL」，並且記錄處理過程 Log 的完整腳本與流程說明。
 
-### 🔧 建立專案
+### ⚙ 功能總覽 <a href="#gong-neng-zong-lan" id="gong-neng-zong-lan"></a>
 
-1. Visual Studio ➜ 建立新專案 ➜ ASP.NET Core Web API
-2. 設定：
-   * 不使用 HTTPS
-   * 不使用 OpenAPI
-   * 不使用 Entity Framework
+1\. 自動找出未設定 DEFAULT 的欄位。
 
-***
+2\. 依據欄位型態，設定適當的 DEFAULT 值（如 nvarchar、int、decimal）。
 
-### 📁 Receiving Model
+3\. 將允許 NULL 的欄位改為「NOT NULL」。
 
-`Models/Receiving.cs`:
+4\. 自動產生並執行 ALTER TABLE 指令。
 
-```csharp
-public class Receiving {
-    public string LotId { get; set; }
-    public int Qty { get; set; }
-    public string PartId { get; set; }
-    public string SuggestionLoc { get; set; }
-    public string Locator { get; set; }
-    public string IsEnd { get; set; }
-}
+5\. 全程記錄處理的每一筆欄位動作與時間戳記。
+
+### 🛠 腳本流程 <a href="#jiao-ben-liu-cheng" id="jiao-ben-liu-cheng"></a>
+
+1\. 掃描資料庫內所有 BASE TABLE。
+
+2\. 篩選出無 DEFAULT 且型態符合設定 (nvarchar、int、decimal) 的欄位。
+
+3\. 排除主鍵與自動增號 (IDENTITY) 欄位。
+
+4\. 依資料型態決定 DEFAULT 值並設定。
+
+5\. 如欄位允許 NULL，修改成 NOT NULL。
+
+6\. 每次執行記錄 ALTER 指令與執行時間。
+
+### 📋 注意事項 <a href="#zhu-yi-shi-xiang" id="zhu-yi-shi-xiang"></a>
+
+⚡ 修改成 NOT NULL 前，請確保欄位內部資料無 NULL，避免失敗。
+
+⚡ 預設值設定以('')、((0))為例，依需求可自訂。
+
+⚡ 使用本腳本建議事前完整備份資料庫！
+
+⚡ 為確保執行結果符合實際需求，請將@ExecuteCommands BIT 設定為 0，進行預覽
+
+### ⚙ 先建立SchemaChangeLog 資料表，紀錄LOG <a href="#xian-jian-li-schemachangelog-zi-liao-biao-ji-lu-log" id="xian-jian-li-schemachangelog-zi-liao-biao-ji-lu-log"></a>
+
+```sql
+IF OBJECT_ID('dbo.SchemaChangeLog', 'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.SchemaChangeLog (
+        LogID INT IDENTITY(1,1) PRIMARY KEY,
+        ChangeTime DATETIME DEFAULT(GETDATE()),
+        TableName NVARCHAR(128),
+        ColumnName NVARCHAR(128),
+        ActionType NVARCHAR(100),
+        SqlCommand NVARCHAR(MAX),
+        Operator NVARCHAR(50) DEFAULT (SUSER_SNAME())  -- 執行人
+    );
+    PRINT '✅ 建立 SchemaChangeLog 成功！';
+END
+ELSE
+BEGIN
+    PRINT '📝 SchemaChangeLog 已存在，略過建立。';
+END
 ```
 
-***
+### ⚙執行下列語法 <a href="#zhi-xing-xia-lie-yu-fa" id="zhi-xing-xia-lie-yu-fa"></a>
 
-### 📂 Receiving Controller
+```sql
+-- ==== 設定區 ====
+DECLARE @TargetTable NVARCHAR(128) = NULL; -- 指定資料表，例如 'MET03_0000'，NULL = 全部
+DECLARE @ExecuteCommands BIT = 0;           -- 1=立即執行, 0=只產生語法
 
-`Controllers/ReceivingController.cs`:
+-- ==== 宣告變數 ====
+DECLARE @TableName NVARCHAR(128);
+DECLARE @ColumnName NVARCHAR(128);
+DECLARE @DataType NVARCHAR(128);
+DECLARE @IsNullable NVARCHAR(3);
+DECLARE @CharacterMaximumLength INT;
+DECLARE @NumericPrecision INT;
+DECLARE @NumericScale INT;
+DECLARE @DefaultValue NVARCHAR(100);
+DECLARE @SqlCmd NVARCHAR(MAX);
+DECLARE @AlterNullCmd NVARCHAR(MAX);
+DECLARE @Now DATETIME = GETDATE();
+DECLARE @ErrMsg NVARCHAR(MAX);
 
-```csharp
-[ApiController]
-[Route("[controller]")]
-public class ReceivingController : ControllerBase {
-    private static List<Receiving> receivingList = new();
+-- ==== 暫存要處理的欄位 ====
+IF OBJECT_ID('tempdb..#ColumnsToModify') IS NOT NULL
+    DROP TABLE #ColumnsToModify;
 
-    [HttpGet]
-    public ActionResult<IEnumerable<Receiving>> Get() => receivingList;
+SELECT 
+    a.TABLE_NAME AS TableName,
+    b.COLUMN_NAME AS ColumnName,
+    b.DATA_TYPE AS DataType,
+    b.IS_NULLABLE AS IsNullable,
+    b.CHARACTER_MAXIMUM_LENGTH AS CharacterMaximumLength,
+    b.NUMERIC_PRECISION AS NumericPrecision,
+    b.NUMERIC_SCALE AS NumericScale
+INTO #ColumnsToModify
+FROM INFORMATION_SCHEMA.TABLES a
+JOIN INFORMATION_SCHEMA.COLUMNS b ON a.TABLE_NAME = b.TABLE_NAME
+WHERE a.TABLE_TYPE = 'BASE TABLE'
+  AND b.COLUMN_DEFAULT IS NULL
+  AND b.DATA_TYPE IN ('nvarchar', 'int', 'decimal')
+  AND a.TABLE_NAME + '-' + b.COLUMN_NAME NOT IN (
+        SELECT TABLE_NAME + '-' + COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    )
+  AND a.TABLE_NAME + '-' + b.COLUMN_NAME NOT IN (
+        SELECT b.name + '-' + a.name 
+        FROM sys.identity_columns a 
+        INNER JOIN sys.objects b ON a.object_id = b.object_id
+    )
+  AND (@TargetTable IS NULL OR a.TABLE_NAME = @TargetTable)
+ORDER BY a.TABLE_NAME, b.COLUMN_NAME;
 
-    [HttpPost]
-    public IActionResult Post([FromBody] Receiving receiving) {
-        receivingList.Add(receiving);
-        return Ok();
-    }
-}
+-- ==== 開啟 Transaction ====
+IF @ExecuteCommands = 1
+BEGIN
+    BEGIN TRANSACTION;
+END
+
+-- ==== 處理每一筆 ====
+WHILE EXISTS (SELECT 1 FROM #ColumnsToModify)
+BEGIN
+    BEGIN TRY
+        -- 抓一筆資料
+        SELECT TOP 1
+            @TableName = TableName,
+            @ColumnName = ColumnName,
+            @DataType = DataType,
+            @IsNullable = IsNullable,
+            @CharacterMaximumLength = CharacterMaximumLength,
+            @NumericPrecision = NumericPrecision,
+            @NumericScale = NumericScale
+        FROM #ColumnsToModify;
+
+        -- 設定預設值
+        SET @DefaultValue = 
+            CASE 
+                WHEN @DataType = 'nvarchar' THEN N'('''')'
+                WHEN @DataType = 'int' THEN N'((0))'
+                WHEN @DataType = 'decimal' THEN N'((0))'
+                ELSE NULL
+            END;
+
+        -- 組成 ALTER DEFAULT 語法
+        SET @SqlCmd = 
+            N'ALTER TABLE [' + @TableName + N'] ADD DEFAULT ' + @DefaultValue +
+            N' FOR [' + @ColumnName + N'] WITH VALUES;';
+
+        -- 顯示SQL
+        RAISERROR('%s', 0, 1, @SqlCmd) WITH NOWAIT;
+
+        IF @ExecuteCommands = 1
+        BEGIN
+            EXEC sp_executesql @SqlCmd;
+            -- 插入 Log
+            INSERT INTO dbo.SchemaChangeLog (ChangeTime, TableName, ColumnName, ActionType, SqlCommand)
+            VALUES (GETDATE(), @TableName, @ColumnName, N'Add Default', @SqlCmd);
+        END
+
+        -- 如果允許 NULL，組成 ALTER COLUMN 改 NOT NULL
+        IF @IsNullable = 'YES'
+        BEGIN
+            SET @AlterNullCmd = 
+                N'ALTER TABLE [' + @TableName + N'] ALTER COLUMN [' + @ColumnName + N'] ' +
+                CASE 
+                    WHEN @DataType = 'nvarchar' THEN 'NVARCHAR(' + 
+                        CASE WHEN @CharacterMaximumLength = -1 THEN 'MAX' ELSE CAST(@CharacterMaximumLength AS NVARCHAR) END + ')'
+                    WHEN @DataType = 'int' THEN 'INT'
+                    WHEN @DataType = 'decimal' THEN 'DECIMAL(' + 
+                        CAST(@NumericPrecision AS NVARCHAR) + ',' + CAST(@NumericScale AS NVARCHAR) + ')'
+                    ELSE @DataType
+                END +
+                ' NOT NULL;';
+
+            RAISERROR('%s', 0, 1, @AlterNullCmd) WITH NOWAIT;
+
+            IF @ExecuteCommands = 1
+            BEGIN
+                EXEC sp_executesql @AlterNullCmd;
+                -- 插入 Log
+                INSERT INTO dbo.SchemaChangeLog (ChangeTime, TableName, ColumnName, ActionType, SqlCommand)
+                VALUES (GETDATE(), @TableName, @ColumnName, N'Alter Not Null', @AlterNullCmd);
+            END
+        END
+
+        -- 刪除已處理
+        DELETE FROM #ColumnsToModify
+        WHERE TableName = @TableName AND ColumnName = @ColumnName;
+        
+    END TRY
+    BEGIN CATCH
+        SET @ErrMsg = ERROR_MESSAGE();
+        PRINT '⚠️ 錯誤: ' + @ErrMsg;
+        IF @ExecuteCommands = 1
+        BEGIN
+            ROLLBACK TRANSACTION;
+            PRINT '❌ 發生錯誤，自動 Rollback！';
+            RETURN;
+        END
+    END CATCH
+END
+
+-- ==== 提交 Transaction ====
+IF @ExecuteCommands = 1
+BEGIN
+    COMMIT TRANSACTION;
+    PRINT '✅ 全部成功，已 Commit！';
+END
+
+-- ==== 顯示完成訊息 ====
+DECLARE @EndTime NVARCHAR(50) = FORMAT(GETDATE(), 'yyyy-MM-ddTHH:mm:ss.fffffffzzz');
+PRINT '🎉 處理完成！完成時間: ' + @EndTime;
 ```
-
-***
-
-### 🛠 Program.cs 設定
-
-```csharp
-builder.WebHost.UseUrls("http://192.168.0.7:5265"); // 改為你的區網 IP
-```
-
-***
-
-### 🔥 Windows 開 Port
-
-```bash
-netsh advfirewall firewall add rule name="WebAPI" dir=in action=allow protocol=TCP localport=5265
-```
-
-***
-
-## 3. ✅ 調整 API 網路可連性
-
-### `launchSettings.json` 修改
-
-```json
-"applicationUrl": "http://192.168.0.7:5265"
-```
-
-***
-
-## 4. ✅ 建立 Android Retrofit 呼叫
-
-### ApiClient.java
-
-```java
-public class ApiClient {
-    private static final String BASE_URL = "http://192.168.0.7:5265/";
-    private static Retrofit retrofit;
-
-    public static Retrofit getClient() {
-        if (retrofit == null) {
-            retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
-        }
-        return retrofit;
-    }
-}
-```
-
-***
-
-### ApiService.java
-
-```java
-public interface ApiService {
-    @POST("receiving")
-    Call<Void> postReceiving(@Body Receiving receiving);
-
-    @GET("receiving")
-    Call<List<Receiving>> getReceivingList();
-}
-```
-
-***
-
-### Receiving.java
-
-```java
-public class Receiving {
-    private String lotId;
-    private int qty;
-    private String partId;
-    private String suggestionLoc;
-    private String locator;
-    private String isEnd;
-
-    public Receiving(String lotId, int qty, String partId, String suggestionLoc, String locator, String isEnd) {
-        this.lotId = lotId;
-        this.qty = qty;
-        this.partId = partId;
-        this.suggestionLoc = suggestionLoc;
-        this.locator = locator;
-        this.isEnd = isEnd;
-    }
-}
-```
-
-***
-
-### 呼叫 POST / GET
-
-```java
-Receiving data = new Receiving("LOT001", 100, "PART123", "A01", "L01", "N");
-ApiService apiService = ApiClient.getClient().create(ApiService.class);
-
-// POST
-apiService.postReceiving(data).enqueue(new Callback<Void>() {
-    public void onResponse(Call<Void> call, Response<Void> response) {
-        Log.i("API", "成功：" + response.code());
-    }
-
-    public void onFailure(Call<Void> call, Throwable t) {
-        Log.e("API", "錯誤：" + t.getMessage());
-    }
-});
-
-// GET
-apiService.getReceivingList().enqueue(new Callback<List<Receiving>>() {
-    public void onResponse(Call<List<Receiving>> call, Response<List<Receiving>> response) {
-        List<Receiving> list = response.body();
-        // 處理資料
-    }
-
-    public void onFailure(Call<List<Receiving>> call, Throwable t) {
-        Log.e("API", "錯誤：" + t.getMessage());
-    }
-});
-```
-
-***
-
-## 5. ✅ Android 網路設定
-
-### `AndroidManifest.xml`
-
-```xml
-<uses-permission android:name="android.permission.INTERNET" />
-```
-
-***
-
-### `network_security_config.xml`
-
-```xml
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>
-```
-
-`AndroidManifest.xml` 設定：
-
-```xml
-<application
-    android:networkSecurityConfig="@xml/network_security_config">
-</application>
-```
-
-***
-
-## 6. ✅ 測試與除錯
-
-| 項目           | 檢查                     |
-| ------------ | ---------------------- |
-| 主機 IP        | 是否正確 (192.168.x.x)     |
-| Android 可否連線 | 手機瀏覽器是否能打開 API         |
-| API 啟動       | Console 有無啟動訊息         |
-| Port 開放      | `netstat`, `telnet` 測試 |
-
-***
-
-## 7. ✅ 常見錯誤與解法
-
-| 錯誤訊息                                    | 解法                           |
-| --------------------------------------- | ---------------------------- |
-| `EPERM Operation not permitted`         | 模擬器或裝置未允許 HTTP               |
-| `Cleartext communication not permitted` | 加入 network\_security\_config |
-| `404 Not Found`                         | 路徑錯誤 / API 名稱錯誤              |
-| `Failed to connect`                     | IP 錯誤 / port 未開 / API 關閉     |

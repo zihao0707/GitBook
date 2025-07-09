@@ -1,4 +1,23 @@
 # Table of contents
 
-* [GitBook：Android 串接 C# API 教學（無 Entity Framework）](README.md)
-* [設計說明文件](she-ji-shuo-ming-wen-jian.md)
+* [MSSQL 2019 自動補齊預設值 & 不允許NULL 欄位](README.md)
+
+## MSSQL 2022 自動備份設定
+
+* [專業版自動備份](mssql-2022-zi-dong-bei-fen-she-ding/zhuan-ye-ban-zi-dong-bei-fen.md)
+* [免費版自動備份](mssql-2022-zi-dong-bei-fen-she-ding/mian-fei-ban-zi-dong-bei-fen.md)
+
+***
+
+* [免費版 UI 設定教學：自動備份與清除](mian-fei-ban-ui-she-ding-jiao-xue-zi-dong-bei-fen-yu-qing-chu.md)
+* [專業版 UI 設定教學：自動備份與清除](zhuan-ye-ban-ui-she-ding-jiao-xue-zi-dong-bei-fen-yu-qing-chu.md)
+
+## 部分情境的語法說明
+
+* [使用 CROSS JOIN 擴展查詢結果](bu-fen-qing-jing-de-yu-fa-shuo-ming/shi-yong-cross-join-kuo-zhan-cha-xun-jie-guo.md)
+
+***
+
+* [使用EXISTS查詢已匯入與未匯入的資料](shi-yong-exists-cha-xun-yi-hui-ru-yu-wei-hui-ru-de-zi-liao.md)
+* [拆解跨日資料 以遞迴方式為例](chai-jie-kua-ri-zi-liao-yi-di-hui-fang-shi-wei-li.md)
+* [SQL Server Table-Valued Function (TVF) 使用教學](sql-server-tablevalued-function-tvf-shi-yong-jiao-xue.md)
