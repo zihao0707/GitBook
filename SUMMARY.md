@@ -21,3 +21,4 @@
 * [使用EXISTS查詢已匯入與未匯入的資料](shi-yong-exists-cha-xun-yi-hui-ru-yu-wei-hui-ru-de-zi-liao.md)
 * [拆解跨日資料 以遞迴方式為例](chai-jie-kua-ri-zi-liao-yi-di-hui-fang-shi-wei-li.md)
 * [SQL Server Table-Valued Function (TVF) 使用教學](sql-server-tablevalued-function-tvf-shi-yong-jiao-xue.md)
+* [MSSQL 2022：用最簡單的方法找出 BATCH / MOVE\_BATCH（給 12 歲也看得懂）](mssql-2022-yong-zui-jian-dan-de-fang-fa-zhao-chu-batch-movebatch-gei-12-sui-ye-kan-de-dong.md)
