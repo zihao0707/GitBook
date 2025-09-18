@@ -2,6 +2,11 @@
 
 本教學將說明如何透過 **SQL Server Management Studio (SSMS)** 的圖形介面設定 MSSQL 2022 的自動備份與舊檔案清除流程，**無需撰寫 SQL 或 BAT 腳本**。
 
+EXEC sys.sp\_configure 'backup compression default', 1;\
+RECONFIGURE; (預設壓縮)
+
+[https://ithelp.ithome.com.tw/articles/10282099](https://ithelp.ithome.com.tw/articles/10282099)
+
 ***
 
 ## 💾 1. 設定資料庫備份（.bak）
